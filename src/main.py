@@ -10,3 +10,12 @@ import time
 import base64
 import redis
 import numpy as np
+
+# Konfigurasi Redis
+REDIS_HOST = "localhost"
+REDIS_PORT = 6379
+CHANNEL_NAME = "camera_frames"
+
+# Inisialisasi Redis
+r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)
+
