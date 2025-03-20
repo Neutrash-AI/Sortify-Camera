@@ -5,13 +5,14 @@ Jika model AI tidak tersedia, gambar dikirim langsung ke backend melalui Redis.
 """
 
 import os
-import cv2
 import time
 import base64
 import redis
 import numpy as np
 
 # from tensorflow.keras.models import load_model
+
+from camera import initialize_camera
 
 # Konfigurasi Redis
 REDIS_HOST = "localhost"
