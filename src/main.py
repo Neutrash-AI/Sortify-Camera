@@ -21,7 +21,7 @@ REDIS_HOST = "localhost"
 REDIS_PORT = 6379
 CHANNEL_NAME = "camera_frames"
 
-MODEL_PATH = "sortify_ai.h5"
+MODEL_PATH = "./model/sortify_ai.h5"
 USE_MODEL = os.path.exists(MODEL_PATH)  # True jika file model.h5 ada
 
 model = None
@@ -51,8 +51,10 @@ def run_inference(model, frame):
     class_id = np.argmax(preds[0])
     confidence = float(preds[0][class_id])
 
-    labels = ["O", "R"]
-    label = labels[class_id] if class_id < len(labels) else "unknown"
+    # Map class_id to labels - 0:Organic, 1:Recycle
+    labels = ["Organic", "Recycle"]
+    # Ensure we don't get IndexError if model predicts unexpected class_id
+    label = labels[class_id] if 0 <= class_id < len(labels) else "Unknown"
 
     h, w, _ = frame.shape
     # Make bounding box 3/4 of the smaller dimension (height or width)
