@@ -38,6 +38,42 @@ else:
 # Inisialisasi Redis
 r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)
 
+def run_inference(model, frame):
+    """
+    Melakukan inferensi menggunakan model klasifikasi sederhana berbasis CNN.
+    Mengembalikan satu bounding box di tengah frame sebagai contoh.
+    """
+    input_frame = cv2.resize(frame, (150, 150))
+    input_frame = input_frame.astype("float32") / 255.0
+    input_frame = np.expand_dims(input_frame, axis=0)
+
+    preds = model.predict(input_frame)
+    class_id = np.argmax(preds[0])
+    confidence = float(preds[0][class_id])
+
+    labels = ["O", "R"]
+    label = labels[class_id] if class_id < len(labels) else "unknown"
+
+    h, w, _ = frame.shape
+    # Make bounding box 3/4 of the smaller dimension (height or width)
+    box_size = int(min(h, w) * 0.75)
+    # Center the box in the frame
+    x = w // 2 - box_size // 2
+    y = h // 2 - box_size // 2
+    bbox = [x, y, box_size, box_size]  # x, y, w, h
+
+    return [{
+        "label": label,
+        "confidence": confidence,
+        "bbox": bbox
+    }]
+
+def draw_bounding_box(frame, x, y, w, h, label, confidence):
+    color = (0, 255, 0)
+    cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+    text = f"{label} ({confidence:.2f})"
+    cv2.putText(frame, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
 def main():
     """Fungsi utama untuk menangkap video, memprosesnya, dan mengirim hasil ke backend."""
     cap = initialize_camera()
@@ -47,21 +83,21 @@ def main():
             if not ret:
                 continue
 
-            # detections = []
-            # if USE_MODEL and model is not None:
-            #     detections = run_inference(model, frame)
-            #     for obj in detections:
-            #         x, y, w, h = obj["bbox"]
-            #         draw_bounding_box(frame, x, y, w, h, obj["label"], obj["confidence"])
+            detections = []
+            if USE_MODEL and model is not None:
+                detections = run_inference(model, frame)
+                for obj in detections:
+                    x, y, w, h = obj["bbox"]
+                    draw_bounding_box(frame, x, y, w, h, obj["label"], obj["confidence"])
 
             _, buffer = cv2.imencode(".jpg", frame)
             b64_frame = base64.b64encode(buffer).decode("utf-8")
 
             payload = {
-                # "hasModel": USE_MODEL,
+                "hasModel": USE_MODEL,
                 "timestamp": time.time(),
                 "image": b64_frame,
-                # "detections": detections
+                "detections": detections
             }
          
             
