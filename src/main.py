@@ -1,7 +1,7 @@
 """
 Script ini digunakan untuk streaming video dari ESP32-S3 (OV2640) via serial dan integrasi AI.
 Perintah kamera diakhiri dengan karakter '\n'.
-Python membaca header 4 byte (panjang frame), lalu frame JPEG, proses inferensi, gambar bounding box, dan kirim payload via Redis.
+Python membaca header 4 byte (panjang frame), lalu frame JPEG, proses inferensi, gambar bounding box, kirim perintah ke ESP, dan kirim payload via Redis.
 """
 
 import os
@@ -16,7 +16,7 @@ import numpy as np
 from tensorflow.keras.models import load_model
 import serial
 
-# Konfigurasi serial
+# Konfigurasi serial ke ESP32
 SERIAL_PORT = '/dev/ttyS4'
 BAUD_RATE = 115200
 ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
@@ -48,7 +48,7 @@ def run_inference(model, frame):
     preds = model.predict(img)
     class_id = np.argmax(preds[0])
     confidence = float(preds[0][class_id])
-    labels = ["Organic","Recycle"]
+    labels = ["Organic","Recycle"] # index 0=Organic,1=Recycle
     label = labels[class_id] if 0<=class_id<len(labels) else "Unknown"
     h,w,_ = frame.shape
     size = int(min(h,w)*0.75)
@@ -56,13 +56,25 @@ def run_inference(model, frame):
     y = h//2 - size//2
     return [{"label":label,"confidence":confidence,"bbox":[x,y,size,size]}]
 
-# Gambar box
+# Gambar box pada frame
 def draw_bounding_box(frame,obj):
     x,y,w,h = obj['bbox']
     color=(0,255,0)
     cv2.rectangle(frame,(x,y),(x+w,y+h),color,2)
     text=f"{obj['label']} ({obj['confidence']*100:.1f}%)"
     cv2.putText(frame,text,(x,y-10),cv2.FONT_HERSHEY_SIMPLEX,0.5,color,2)
+
+# Kirim perintah ke ESP32 berdasarkan label deteksi
+def send_serial_command(label):
+    # Sesuaikan perintah: 'S 0' untuk Recycle, 'S 1' untuk Organic
+    cmd = None
+    if label == 'Recycle':
+        cmd = 'S 0'
+    elif label == 'Organic':
+        cmd = 'S 1'
+    if cmd:
+        ser.write((cmd + '\n').encode('utf-8'))
+        print(f"Sent command to ESP: {cmd}")
 
 # Proses utama
 while True:
@@ -91,6 +103,8 @@ while True:
         detections = run_inference(model, frame)
         for obj in detections:
             draw_bounding_box(frame,obj)
+            # Kirim perintah ke ESP berdasarkan label
+            send_serial_command(obj['label'])
 
     # Encode ke base64
     _,buf = cv2.imencode('.jpg',frame)
