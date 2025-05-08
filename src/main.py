@@ -17,7 +17,7 @@ from tensorflow.keras.models import load_model
 import serial
 
 # Konfigurasi serial ke ESP32
-SERIAL_PORT = '/dev/ttyS4'
+SERIAL_PORT = '/dev/ttyACM0'
 BAUD_RATE = 115200
 ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
 
