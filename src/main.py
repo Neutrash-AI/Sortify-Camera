@@ -99,7 +99,8 @@ def main():
                 "hasModel": USE_MODEL,
                 "timestamp": time.time(),
                 "image": b64_frame,
-                "detections": detections
+                "detections": detections,
+                "label": obj["label"] if detections else None,
             }
          
             
