@@ -11,10 +11,13 @@ import base64
 import redis
 import numpy as np
 import json
+import serial
 
 from tensorflow.keras.models import load_model
 
 from camera import initialize_camera
+
+ser = serial.Serial("/dev/ttyUSB0", 115200, timeout=1)
 
 # Konfigurasi Redis
 REDIS_HOST = "localhost"
@@ -37,6 +40,21 @@ else:
 
 # Inisialisasi Redis
 r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)
+
+# Kirim perintah ke ESP32 berdasarkan label deteksi
+
+
+def send_serial_command(label):
+    # Sesuaikan perintah: 'S 0' untuk Recycle, 'S 1' untuk Organic
+    cmd = None
+    if label == 'Recycle':
+        cmd = 'S 0'
+    elif label == 'Organic':
+        cmd = 'S 1'
+    if cmd:
+        ser.write((cmd + '\n').encode('utf-8'))
+        print(f"Sent command to ESP: {cmd}")
+
 
 def run_inference(model, frame):
     """
@@ -70,11 +88,14 @@ def run_inference(model, frame):
         "bbox": bbox
     }]
 
+
 def draw_bounding_box(frame, x, y, w, h, label, confidence):
     color = (0, 255, 0)
     cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
     text = f"{label} ({confidence:.2f})"
-    cv2.putText(frame, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+    cv2.putText(frame, text, (x, y - 10),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
 
 def main():
     """Fungsi utama untuk menangkap video, memprosesnya, dan mengirim hasil ke backend."""
@@ -90,7 +111,10 @@ def main():
                 detections = run_inference(model, frame)
                 for obj in detections:
                     x, y, w, h = obj["bbox"]
-                    draw_bounding_box(frame, x, y, w, h, obj["label"], obj["confidence"])
+                    draw_bounding_box(frame, x, y, w, h,
+                                      obj["label"], obj["confidence"])
+
+                    send_serial_command(obj['label'])
 
             _, buffer = cv2.imencode(".jpg", frame)
             b64_frame = base64.b64encode(buffer).decode("utf-8")
@@ -102,15 +126,14 @@ def main():
                 "detections": detections,
                 "label": obj["label"] if detections else None,
             }
-         
-            
+
             r.publish(CHANNEL_NAME, json.dumps(payload))
-            
+
             if cv2.waitKey(30) & 0xFF == ord('q'):
                 break
     finally:
         cap.release()
 
+
 if __name__ == "__main__":
     main()
-
